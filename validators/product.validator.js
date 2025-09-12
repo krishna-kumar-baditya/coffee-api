@@ -30,12 +30,6 @@ const productValidationSchema = Joi.object({
             "number.max": "Discount price cannot exceed original price",
         }),
 
-    category: Joi.string().hex().length(24).required().messages({
-        "string.hex": "Category must be a valid ObjectId",
-        "string.length": "Category must be 24-character hex string",
-        "any.required": "Category is required",
-    }),
-
     stock: Joi.number().integer().min(0).required().messages({
         "number.base": "Stock must be a number",
         "number.integer": "Stock must be a whole number",
@@ -68,6 +62,16 @@ const productValidationSchema = Joi.object({
             "any.only": "Roast level must be Light, Medium, or Dark",
         }),
 
-});
+    // ✅ NEW: Allow 'images' field as an array of strings (Cloudinary URLs)
+    images: Joi.array()
+        .items(Joi.string().uri()) // Each item must be a valid URL
+        .min(1) // At least one image required
+        .required() // Make it required if you always expect images
+        .messages({
+            "array.base": "Images must be an array",
+            "array.min": "At least one image is required",
+            "string.uri": "Each image must be a valid URL",
+        }),
+}).options({ abortEarly: false }); // Keep this for full error reporting
 
 module.exports = { productValidationSchema };

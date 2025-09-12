@@ -31,9 +31,16 @@ const signupSchema = Joi.object({
         .messages({
             "any.required": "Password is required.",
         }),
-    age: Joi.number().integer().positive().optional(), // or required() if needed
+    age: Joi.number().integer().positive().optional(),
     role: Joi.string().valid("user", "admin").optional(),
-});
+    // ✅ NEW: Allow profilePic as optional URL
+    profilePic: Joi.string()
+        .uri() // Ensures it's a valid URL (e.g., https://...)
+        .optional()
+        .messages({
+            "string.uri": "Profile picture must be a valid URL.",
+        }),
+}).options({ abortEarly: false });
 
 const signinSchema = Joi.object({
     email: Joi.string()

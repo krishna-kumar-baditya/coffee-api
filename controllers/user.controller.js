@@ -1,8 +1,6 @@
 const UserRepository = require("../repositories/user.repositories");
 const { updateUserSchema } = require("../validators/user.validator");
 const UserModel = require("../models/user.model");
-const FileDeleter = require("../helper/deletefile");
-const fileDeleter = new FileDeleter("uploads/profile");
 class UserController {
     async profileDetails(req, res) {
         try {
@@ -98,37 +96,60 @@ class UserController {
     async updateUserData(req, res) {
         try {
             const user = req.user;
-
-            console.log(user._id);
             const { error, value } = updateUserSchema.validate(req.body, {
                 abortEarly: false,
             });
             if (error) {
                 const message = error.details.map((detail) => detail.message);
-                fileDeleter.deleteSingle(req.file.filename);
-
                 return res.status(400).send({
                     status: 400,
                     data: {},
                     message: message,
                 });
             }
+
             const { email, password, firstName, lastName, age, role } =
                 value ?? {};
             const hashedPassword = await new UserModel().generateHash(password);
-            const profilePic = req.file ? req.file.filename : null;
+            const profilePic = req.body.profilePic;
+
+            // Fetch current user to get old profilePic
+            const currentUser = await UserRepository.findById(user._id);
+            if (!currentUser) {
+                return res.status(404).send({
+                    status: 404,
+                    message: "User not found",
+                });
+            }
+
+            // Check if email exists (excluding current user)
             const isEmailExists = await UserRepository.emailExists(
                 email,
                 user._id
             );
             if (isEmailExists) {
-                fileDeleter.deleteSingle(profilePic);
                 return res.status(400).send({
                     status: 400,
                     data: {},
                     message: "Email is already taken",
                 });
             }
+
+            // Delete old profile pic from Cloudinary if new one is provided
+            if (profilePic && currentUser.profilePic) {
+                try {
+                    const publicId = currentUser.profilePic
+                        .split("/image/upload/")
+                        .pop()
+                        .split(".")[0];
+
+                    await cloudinary.uploader.destroy(publicId);
+                    console.log("✅ Deleted old profile pic:", publicId);
+                } catch (err) {
+                    console.warn("⚠️ Failed to delete old image:", err.message);
+                }
+            }
+
             const userObj = {
                 email,
                 password: hashedPassword,
@@ -143,21 +164,17 @@ class UserController {
                 user._id,
                 userObj
             );
-            console.log("updatedData ", updatedData);
 
-            if (updatedData) {
-                return res.status(200).send({
-                    status: 200,
-                    message: "update data successfully",
-                });
-            }
+            return res.status(200).send({
+                status: 200,
+                data: updatedData,
+                message: "Update successful",
+            });
         } catch (error) {
-            console.log(
-                `error in updateUserData of usercontroller due to : ${error.message} `
-            );
+            console.error(`Error in updateUserData: ${error.message}`);
             return res.status(500).send({
                 status: 500,
-                message: error.message || error,
+                message: "Internal server error",
             });
         }
     }

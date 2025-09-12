@@ -2,9 +2,6 @@ const AuthRepository = require("../repositories/auth.repositories");
 const { signupSchema, signinSchema } = require("../validators/auth.validator");
 const UserModel = require("../models/user.model");
 const Mailer = require("../helper/mailer");
-const FileDeleter = require("../helper/deletefile");
-const fileDeleter = new FileDeleter("uploads/profile");
-
 const jwt = require("jsonwebtoken");
 class AuthController {
     async signup(req, res) {
@@ -14,21 +11,18 @@ class AuthController {
             });
             if (error) {
                 const messages = error.details.map((detail) => detail.message);
-                fileDeleter.deleteSingle(req.file.filename);
 
                 return res.status(400).send({
-                    staus: 400,
+                    status: 400,
                     data: {},
                     message: messages,
                 });
             }
-            const { email, password, firstName, lastName, age, role } = value;
+            const { email, password, firstName, lastName, age, role ,profilePic} = value;
             const hashedPassword = await new UserModel().generateHash(password);
-            const profilePic = req.file ? req.file.filename : null;
             // Check if email exists
             const isEmailExists = await AuthRepository.emailExists(email);
             if (isEmailExists) {
-                fileDeleter.deleteSingle(profilePic);
                 return res.status(400).send({
                     status: 400,
                     data: {},
@@ -48,7 +42,6 @@ class AuthController {
 
             const newUser = await AuthRepository.createuser(userObj);
             if (newUser) {
-                fileDeleter.deleteSingle(profilePic);
 
                 const mailer = new Mailer(
                     "Gmail",
@@ -70,7 +63,6 @@ class AuthController {
                     message: "Registration successfully completed!",
                 });
             } else {
-                fileDeleter.deleteSingle(profilePic);
 
                 return res.status(400).send({
                     status: 400,
@@ -82,12 +74,11 @@ class AuthController {
             console.log(
                 `error in signup of authcontroller due to :${error.message} `
             );
-            fileDeleter.deleteSingle(req.file.filename);
 
             return res.status(500).send({
                 status: 500,
                 data: {},
-                message: err.message || err,
+                message: error.message,
             });
         }
     }
@@ -99,7 +90,7 @@ class AuthController {
             if (error) {
                 const messages = error.details.map((detail) => detail.message);
                 return res.status(400).send({
-                    staus: 400,
+                    status: 400,
                     data: {},
                     message: messages,
                 });
@@ -157,7 +148,7 @@ class AuthController {
             if (error) {
                 const messages = error.details.map((detail) => detail.message);
                 return res.status(400).send({
-                    staus: 400,
+                    status: 400,
                     data: {},
                     message: messages,
                 });

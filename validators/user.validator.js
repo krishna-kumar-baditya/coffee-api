@@ -10,6 +10,12 @@ const updateUserSchema = Joi.object({
         "string.min": "Firstname must be at least 2 characters.",
         "string.max": "Firstname must not exceed 10 characters.",
     }),
+    profilePic: Joi.string()
+        .uri() // Ensures it's a valid URL (e.g., https://...)
+        .optional()
+        .messages({
+            "string.uri": "Profile picture must be a valid URL.",
+        }),
 
     lastName: Joi.string().min(2).max(10).optional().messages({
         "string.min": "Lastname must be at least 2 characters.",

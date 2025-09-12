@@ -24,11 +24,6 @@ const ProductSchema = new mongoose.Schema(
             type: Number,
             min: 0,
         },
-        category: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "category",
-            required: true,
-        },
         stock: {
             type: Number,
             required: true,

@@ -1,21 +1,15 @@
-const FileDeleter = require("../helper/deletefile");
+const cloudinary = require("cloudinary").v2;
+const { uploadToCloudinary } = require("../helper/cloudinaryUploader");
 const ProductRepositories = require("../repositories/product.repositories");
 const { productValidationSchema } = require("../validators/product.validator");
-const fileDeleter = new FileDeleter("uploads/products");
 class ProductController {
     async createProduct(req, res) {
         try {
             const { error, value } = productValidationSchema.validate(
                 req.body,
-                {
-                    abortEarly: false,
-                }
+                { abortEarly: false }
             );
             if (error) {
-                const filenames = req.files.map((file) => file.filename);
-                console.log("error filenames ", filenames);
-                fileDeleter.deleteMultiple(filenames);
-
                 const messages = error.details.map((detail) => detail.message);
                 return res.status(400).send({
                     success: false,
@@ -23,12 +17,12 @@ class ProductController {
                     message: messages,
                 });
             }
+
             const {
                 name,
                 description,
                 price,
                 discountPrice,
-                category,
                 stock,
                 weight,
                 type,
@@ -36,29 +30,26 @@ class ProductController {
                 origin,
                 roastLevel,
             } = value;
-            if (!req.files || req.files.length === 0) {
-                const filenames = req.files.map((file) => file.filename);
-                console.log("filenames ", filenames);
 
-                fileDeleter.deleteMultiple(filenames);
-                return res.status(400).json({ error: "No files uploaded" });
+            const { images } = req.body; // ✅ FIX: Get images from req.body
+            if (!images || images.length === 0) {
+                return res.status(400).json({ error: "No images provided" });
             }
-            const filenames = req.files.map((file) => file.filename);
-            console.log("filenames ", filenames);
+
             const prodObj = {
                 name,
                 description,
                 price,
                 discountPrice,
-                category,
                 stock,
                 weight,
                 type,
                 brewGuide,
                 origin,
                 roastLevel,
-                images: filenames,
+                images, // Array of Cloudinary URLs
             };
+
             let savedData = await ProductRepositories.createProduct(prodObj);
             return res.status(201).json({
                 success: true,
@@ -67,15 +58,7 @@ class ProductController {
                 message: "Product added successfully",
             });
         } catch (error) {
-            const filenames = req.files.map((file) => file.filename);
-            console.log("filenames ", filenames);
-
-            fileDeleter.deleteMultiple(filenames);
-
-            console.warn(
-                `Error in Product Controller of create product : ${error?.message} `
-            );
-
+            console.warn(`Error in createProduct: ${error?.message}`);
             return res.status(500).json({
                 success: false,
                 status: 500,
@@ -85,8 +68,8 @@ class ProductController {
     }
     async productLists(req, res) {
         try {
-            const {page = 1,limit=5} = req.query
-            let data = await ProductRepositories.productLists(page,limit);
+            const { page = 1, limit = 5 } = req.query;
+            let data = await ProductRepositories.productLists(page, limit);
             return res.status(200).json({
                 success: true,
                 status: 200,
@@ -143,8 +126,8 @@ class ProductController {
         try {
             const { id } = req.params;
 
-            const productData = await ProductRepositories.product(id);
-            if (!productData) {
+            const existingProduct = await ProductRepositories.product(id);
+            if (!existingProduct) {
                 return res.status(404).json({
                     success: false,
                     status: 404,
@@ -152,41 +135,27 @@ class ProductController {
                 });
             }
 
-            console.log("req.body:", req.body); // 🔍 Debug: Check what's coming
-            console.log("req.files:", req.files); // 🔍 Debug: Check uploaded files
+            console.log("Existing product images:", existingProduct.images);
 
             const { error, value } = productValidationSchema.validate(
                 req.body,
-                {
-                    abortEarly: false,
-                }
+                { abortEarly: false }
             );
 
             if (error) {
                 const messages = error.details.map((detail) => detail.message);
-
-                // Clean up uploaded files only if present
-                if (req.files && req.files.length > 0) {
-                    const filenames = req.files.map((file) => file.filename);
-                    console.log("Deleting invalid upload files:", filenames);
-                    fileDeleter.deleteMultiple(filenames);
-                }
-
                 return res.status(400).json({
                     success: false,
                     status: 400,
                     message: messages,
                 });
-                // ✅ Function stops here due to `return`
             }
 
-            // ✅ SAFE TO DESTRUCTURE NOW — validation passed
             const {
                 name,
                 description,
                 price,
                 discountPrice,
-                category,
                 stock,
                 weight,
                 type,
@@ -195,45 +164,59 @@ class ProductController {
                 roastLevel,
             } = value;
 
-            // Validate file upload
-            if (!req.files || req.files.length === 0) {
-                if (req.files && req.files.length === 0) {
-                    const filenames = req.files.map((file) => file.filename);
-                    fileDeleter.deleteMultiple(filenames);
-                }
-                return res.status(400).json({
-                    success: false,
-                    status: 400,
-                    message: "At least one image is required.",
-                });
-            }
+            let newImageUrls = existingProduct.images;
 
-            const filenames = req.files.map((file) => file.filename);
-            console.log("New image filenames:", filenames);
+            if (req.files && req.files.length > 0) {
+                const uploadPromises = req.files.map((file) =>
+                    uploadToCloudinary(file.buffer, "product-images")
+                );
+                const results = await Promise.all(uploadPromises);
+                newImageUrls = results.map((r) => r.secure_url);
+
+                // ✅ Delete old images
+                const oldImageUrls = existingProduct.images || [];
+                const deletionPromises = oldImageUrls.map(async (oldUrl) => {
+                    try {
+                        console.log("👉 Deleting old image:", oldUrl);
+
+                        const publicId = oldUrl
+                            .split("/image/upload/")
+                            .pop()
+                            .split("/")[2]
+                            .split(".")[0];
+                        console.log("🗑️ Destroying public_id:", publicId);
+
+                        await cloudinary.uploader.destroy(publicId);
+                        console.log("✅ Deleted from Cloudinary:", publicId);
+                    } catch (err) {
+                        console.error(
+                            "❌ Failed to delete from Cloudinary:",
+                            err.message
+                        );
+                    }
+                });
+
+                await Promise.allSettled(deletionPromises); // Non-blocking
+            }
 
             const updatedProduct = {
                 name,
                 description,
                 price,
                 discountPrice,
-                category,
                 stock,
                 weight,
                 type,
                 brewGuide,
                 origin,
                 roastLevel,
-                images: filenames,
+                images: newImageUrls,
             };
 
             const savedData = await ProductRepositories.updateProduct(
                 id,
                 updatedProduct
             );
-
-            // // Delete old images from server
-            // const oldImages = productData.images || [];
-            // fileDeleter.deleteMultiple(oldImages);
 
             return res.status(200).json({
                 success: true,
@@ -242,17 +225,9 @@ class ProductController {
                 message: "Product updated successfully",
             });
         } catch (error) {
-            // 🔁 Safely handle any unexpected error
-            if (req.files && req.files.length > 0) {
-                const filenames = req.files.map((file) => file.filename);
-                fileDeleter.deleteMultiple(filenames);
-            }
-
             console.error(
                 `Error in ProductController.productUpdate: ${error.message}`
             );
-            // console.error("Stack:", error.stack);
-
             return res.status(500).json({
                 success: false,
                 status: 500,
@@ -260,6 +235,7 @@ class ProductController {
             });
         }
     }
+
     // controllers/product.controller.js
 
     async deleteProduct(req, res) {
