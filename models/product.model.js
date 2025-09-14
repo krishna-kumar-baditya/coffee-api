@@ -1,4 +1,3 @@
-// models/Coffee.js
 const mongoose = require("mongoose");
 const aggregatePaginate = require("mongoose-aggregate-paginate-v2");
 
@@ -30,12 +29,15 @@ const ProductSchema = new mongoose.Schema(
             min: 0,
             default: 0,
         },
-        images: [
-            {
-                type: String,
-                required: true, // Array of Cloudinary URLs
-            },
-        ],
+        // ✅ CHANGED: Single image URL (not array)
+        image: {
+            type: String,
+            required: true, // Must have at least one image
+            // match: [
+            //     /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/,
+            //     "Must be a valid URL",
+            // ],
+        },
         weight: {
             type: String,
             enum: ["250g", "500g", "1kg"],
@@ -76,6 +78,8 @@ const ProductSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
 ProductSchema.plugin(aggregatePaginate);
-const ProductModel = new mongoose.model("product", ProductSchema);
+
+const ProductModel = mongoose.model("product", ProductSchema);
 module.exports = ProductModel;
