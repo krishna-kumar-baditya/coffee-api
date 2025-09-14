@@ -62,7 +62,21 @@ const productValidationSchema = Joi.object({
             "any.only": "Roast level must be Light, Medium, or Dark",
         }),
 
-    // ✅ NEW: Allow 'images' field as an array of strings (Cloudinary URLs)
+    // ✅ NEW: inStock - boolean, optional, default true
+    inStock: Joi.boolean()
+        .optional()
+        .messages({
+            "boolean.base": "inStock must be a boolean value (true or false)",
+        }),
+
+    // ✅ NEW: isActive - boolean, optional, default false
+    isActive: Joi.boolean()
+        .optional()
+        .messages({
+            "boolean.base": "isActive must be a boolean value (true or false)",
+        }),
+
+    // ✅ Allow 'images' field as an array of strings (Cloudinary URLs)
     images: Joi.array()
         .items(Joi.string().uri()) // Each item must be a valid URL
         .min(1) // At least one image required
@@ -72,12 +86,6 @@ const productValidationSchema = Joi.object({
             "array.min": "At least one image is required",
             "string.uri": "Each image must be a valid URL",
         }),
-    inStock: Joi.boolean().required().default(true).message({
-        "boolean.base": "inStock must be a boolean",
-    }),
-    isActive: Joi.boolean().required().default(true).message({
-        "boolean.base": "isActive must be a boolean",
-    }),
 }).options({ abortEarly: false }); // Keep this for full error reporting
 
 module.exports = { productValidationSchema };
