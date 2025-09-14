@@ -62,30 +62,27 @@ const productValidationSchema = Joi.object({
             "any.only": "Roast level must be Light, Medium, or Dark",
         }),
 
-    // ✅ NEW: inStock - boolean, optional, default true
     inStock: Joi.boolean()
         .optional()
         .messages({
             "boolean.base": "inStock must be a boolean value (true or false)",
         }),
 
-    // ✅ NEW: isActive - boolean, optional, default false
     isActive: Joi.boolean()
         .optional()
         .messages({
             "boolean.base": "isActive must be a boolean value (true or false)",
         }),
 
-    // ✅ Allow 'images' field as an array of strings (Cloudinary URLs)
+    // ✅ CHANGED: Allow images to be optional during update
+    // We'll validate it AFTER upload, when it becomes an array of URLs
     images: Joi.array()
-        .items(Joi.string().uri()) // Each item must be a valid URL
-        .min(1) // At least one image required
-        .required() // Make it required if you always expect images
+        .items(Joi.string().uri())
+        .optional() // 👈 Not required here — we handle it manually
         .messages({
             "array.base": "Images must be an array",
-            "array.min": "At least one image is required",
             "string.uri": "Each image must be a valid URL",
         }),
-}).options({ abortEarly: false }); // Keep this for full error reporting
+}).options({ abortEarly: false });
 
 module.exports = { productValidationSchema };

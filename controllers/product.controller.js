@@ -2,6 +2,8 @@ const cloudinary = require("cloudinary").v2;
 const { uploadToCloudinary } = require("../helper/cloudinaryUploader");
 const ProductRepositories = require("../repositories/product.repositories");
 const { productValidationSchema } = require("../validators/product.validator");
+const Joi = require("joi");
+
 class ProductController {
     async createProduct(req, res) {
         try {
@@ -137,10 +139,19 @@ class ProductController {
 
             console.log("Existing product images:", existingProduct.images);
 
-            const { error, value } = productValidationSchema.validate(
-                req.body,
-                { abortEarly: false }
-            );
+            // ✅ STEP 1: Validate all fields EXCEPT images if files are uploaded
+            let body = req.body;
+
+            // If files are uploaded, temporarily remove 'images' from body for validation
+            if (req.files && req.files.length > 0) {
+                // Clone body without 'images' so Joi doesn't complain about File objects
+                const { images, ...bodyWithoutImages } = req.body;
+                body = bodyWithoutImages;
+            }
+
+            const { error, value } = productValidationSchema.validate(body, {
+                abortEarly: false,
+            });
 
             if (error) {
                 const messages = error.details.map((detail) => detail.message);
@@ -166,8 +177,9 @@ class ProductController {
                 isActive,
             } = value;
 
-            let newImageUrls = existingProduct.images;
+            let newImageUrls = existingProduct.images; // Keep old ones by default
 
+            // ✅ STEP 2: Handle image uploads ONLY if files are present
             if (req.files && req.files.length > 0) {
                 const uploadPromises = req.files.map((file) =>
                     uploadToCloudinary(file.buffer, "product-images")
@@ -175,21 +187,16 @@ class ProductController {
                 const results = await Promise.all(uploadPromises);
                 newImageUrls = results.map((r) => r.secure_url);
 
-                // ✅ Delete old images
+                // Delete old images (non-blocking)
                 const oldImageUrls = existingProduct.images || [];
                 const deletionPromises = oldImageUrls.map(async (oldUrl) => {
                     try {
-                        console.log("👉 Deleting old image:", oldUrl);
-
                         const publicId = oldUrl
                             .split("/image/upload/")
                             .pop()
                             .split("/")[2]
                             .split(".")[0];
-                        console.log("🗑️ Destroying public_id:", publicId);
-
                         await cloudinary.uploader.destroy(publicId);
-                        console.log("✅ Deleted from Cloudinary:", publicId);
                     } catch (err) {
                         console.error(
                             "❌ Failed to delete from Cloudinary:",
@@ -198,7 +205,22 @@ class ProductController {
                     }
                 });
 
-                await Promise.allSettled(deletionPromises); // Non-blocking
+                await Promise.allSettled(deletionPromises);
+            }
+
+            // ✅ STEP 3: Now VALIDATE the final image URLs array
+            const imagesValidation = Joi.array()
+                .items(Joi.string().uri())
+                .min(1) // At least one image required
+                .required()
+                .validate(newImageUrls);
+
+            if (imagesValidation.error) {
+                return res.status(400).json({
+                    success: false,
+                    status: 400,
+                    message: ["At least one valid image URL is required"],
+                });
             }
 
             const updatedProduct = {
@@ -212,7 +234,7 @@ class ProductController {
                 brewGuide,
                 origin,
                 roastLevel,
-                images: newImageUrls,
+                images: newImageUrls, // ✅ Now it's a validated array of URLs
                 inStock,
                 isActive,
             };
@@ -239,7 +261,6 @@ class ProductController {
             });
         }
     }
-
     // controllers/product.controller.js
 
     async deleteProduct(req, res) {
