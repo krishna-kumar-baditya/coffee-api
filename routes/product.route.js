@@ -3,41 +3,14 @@ const router = express.Router();
 const ProductController = require("../controllers/product.controller");
 const { upload, uploadToCloudinary } = require("../helper/cloudinaryUploader");
 
-// Create product with multiple images
 router.post(
     "/create-product",
-    upload.array("images", 3),
+    upload.single("image"), // 👈 Single file
     async (req, res, next) => {
         try {
-            console.log(req.files.length);
-            console.log(req.files.map((file) => file.buffer));
-
-            if (req.files && req.files.length > 0) {
-                const uploadPromises = req.files.map(async (file) => {
-                    try {
-                        const result = await uploadToCloudinary(
-                            file.buffer,
-                            "product-images"
-                        );
-                        console.log("result ", result);
-
-                        return result.secure_url;
-                    } catch (err) {
-                        console.error(
-                            `Failed to upload file ${file.originalname}:`,
-                            err.message
-                        );
-                        throw new Error(
-                            `Upload failed for ${file.originalname}`
-                        );
-                    }
-                });
-                console.log("uploadPromises ", uploadPromises);
-
-                const secureUrls = await Promise.all(uploadPromises);
-                console.log("secureUrls ", secureUrls);
-
-                req.body.images = secureUrls; // Array of URLs
+            if (req.file) {
+                const result = await uploadToCloudinary(req.file.buffer, "product-images");
+                req.body.image = result.secure_url; // 👈 Single URL
             }
 
             await ProductController.createProduct(req, res);
@@ -52,48 +25,30 @@ router.post(
         }
     }
 );
+
 router.get("/productlist", ProductController.productLists);
 router.get("/product/:id", ProductController.product);
 
-// Update product
+// Update product — single image
 router.put(
     "/product-update/:id",
-    upload.array("images", 3),
+    upload.single("image"), // 👈 Single file
     async (req, res, next) => {
         try {
-            console.log(req.files.length);
-            console.log(req.files.map((file) => file.buffer));
-
-            if (req.files && req.files.length > 0) {
-                const uploadPromises = req.files.map(async (file) => {
-                    try {
-                        const result = await uploadToCloudinary(
-                            file.buffer,
-                            "product-images"
-                        );
-                        console.log("result ", result);
-
-                        return result.secure_url;
-                    } catch (error) {
-                        console.error(
-                            `Failed to upload file ${file.originalname}:`,
-                            err.message
-                        );
-                        throw new Error(
-                            `Upload failed for ${file.originalname}`
-                        );
-                    }
-                });
-                console.log("uploadPromises ", uploadPromises);
-
-                const secureUrls = await Promise.all(uploadPromises);
-                console.log("secureUrls ", secureUrls);
-
-                req.body.images = secureUrls; // Array of URLs
+            if (req.file) {
+                const result = await uploadToCloudinary(req.file.buffer, "product-images");
+                req.body.image = result.secure_url; // 👈 Single URL
             }
+
             await ProductController.productUpdate(req, res);
         } catch (err) {
-            return res.status(500).json({ message: "Product update failed" });
+            console.error("Error in /product-update:", err.message);
+            return res.status(500).json({
+                success: false,
+                status: 500,
+                message: "Product update failed",
+                details: err.message,
+            });
         }
     }
 );

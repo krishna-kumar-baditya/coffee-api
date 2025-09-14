@@ -1,4 +1,3 @@
-// utils/validation/productValidation.js
 const Joi = require("joi");
 
 const productValidationSchema = Joi.object({
@@ -74,14 +73,13 @@ const productValidationSchema = Joi.object({
             "boolean.base": "isActive must be a boolean value (true or false)",
         }),
 
-    // ✅ CHANGED: Allow images to be optional during update
-    // We'll validate it AFTER upload, when it becomes an array of URLs
-    images: Joi.array()
-        .items(Joi.string().uri())
-        .optional() // 👈 Not required here — we handle it manually
+    // ✅ SINGLE IMAGE — URL string, required
+    image: Joi.string()
+        .uri()
+        .required()
         .messages({
-            "array.base": "Images must be an array",
-            "string.uri": "Each image must be a valid URL",
+            "string.uri": "Image must be a valid URL",
+            "any.required": "Image is required",
         }),
 }).options({ abortEarly: false });
 

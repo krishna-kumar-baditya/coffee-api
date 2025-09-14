@@ -5,7 +5,7 @@ const { productValidationSchema } = require("../validators/product.validator");
 const Joi = require("joi");
 
 class ProductController {
-    async createProduct(req, res) {
+        async createProduct(req, res) {
         try {
             const { error, value } = productValidationSchema.validate(
                 req.body,
@@ -33,9 +33,9 @@ class ProductController {
                 roastLevel,
             } = value;
 
-            const { images } = req.body; // ✅ FIX: Get images from req.body
-            if (!images || images.length === 0) {
-                return res.status(400).json({ error: "No images provided" });
+            // ✅ Validate image is provided
+            if (!req.body.image) {
+                return res.status(400).json({ error: "Image is required" });
             }
 
             const prodObj = {
@@ -49,7 +49,7 @@ class ProductController {
                 brewGuide,
                 origin,
                 roastLevel,
-                images, // Array of Cloudinary URLs
+                image: req.body.image, // 👈 Single URL string
             };
 
             let savedData = await ProductRepositories.createProduct(prodObj);
@@ -68,6 +68,7 @@ class ProductController {
             });
         }
     }
+
     async productLists(req, res) {
         try {
             const { page = 1, limit = 5 } = req.query;
@@ -124,7 +125,7 @@ class ProductController {
             });
         }
     }
-    async productUpdate(req, res) {
+        async productUpdate(req, res) {
         try {
             const { id } = req.params;
 
@@ -137,16 +138,15 @@ class ProductController {
                 });
             }
 
-            console.log("Existing product images:", existingProduct.images);
+            console.log("Existing product image:", existingProduct.image);
 
-            // ✅ STEP 1: Validate all fields EXCEPT images if files are uploaded
+            // STEP 1: Validate all fields EXCEPT image if file is uploaded
             let body = req.body;
 
-            // If files are uploaded, temporarily remove 'images' from body for validation
-            if (req.files && req.files.length > 0) {
-                // Clone body without 'images' so Joi doesn't complain about File objects
-                const { images, ...bodyWithoutImages } = req.body;
-                body = bodyWithoutImages;
+            if (req.file) {
+                // Clone body without 'image' so Joi doesn't complain about File objects
+                const { image, ...bodyWithoutImage } = req.body;
+                body = bodyWithoutImage;
             }
 
             const { error, value } = productValidationSchema.validate(body, {
@@ -177,49 +177,39 @@ class ProductController {
                 isActive,
             } = value;
 
-            let newImageUrls = existingProduct.images; // Keep old ones by default
+            let newImageUrl = existingProduct.image; // Default to old image
 
-            // ✅ STEP 2: Handle image uploads ONLY if files are present
-            if (req.files && req.files.length > 0) {
-                const uploadPromises = req.files.map((file) =>
-                    uploadToCloudinary(file.buffer, "product-images")
-                );
-                const results = await Promise.all(uploadPromises);
-                newImageUrls = results.map((r) => r.secure_url);
+            // STEP 2: Handle image upload if new file is present
+            if (req.file) {
+                const result = await uploadToCloudinary(req.file.buffer, "product-images");
+                newImageUrl = result.secure_url;
 
-                // Delete old images (non-blocking)
-                const oldImageUrls = existingProduct.images || [];
-                const deletionPromises = oldImageUrls.map(async (oldUrl) => {
+                // Delete old image (non-blocking)
+                if (existingProduct.image) {
                     try {
-                        const publicId = oldUrl
+                        const publicId = existingProduct.image
                             .split("/image/upload/")
                             .pop()
                             .split("/")[2]
                             .split(".")[0];
                         await cloudinary.uploader.destroy(publicId);
                     } catch (err) {
-                        console.error(
-                            "❌ Failed to delete from Cloudinary:",
-                            err.message
-                        );
+                        console.error("❌ Failed to delete old image:", err.message);
                     }
-                });
-
-                await Promise.allSettled(deletionPromises);
+                }
             }
 
-            // ✅ STEP 3: Now VALIDATE the final image URLs array
-            const imagesValidation = Joi.array()
-                .items(Joi.string().uri())
-                .min(1) // At least one image required
+            // STEP 3: Validate final image URL
+            const imageValidation = Joi.string()
+                .uri()
                 .required()
-                .validate(newImageUrls);
+                .validate(newImageUrl);
 
-            if (imagesValidation.error) {
+            if (imageValidation.error) {
                 return res.status(400).json({
                     success: false,
                     status: 400,
-                    message: ["At least one valid image URL is required"],
+                    message: ["Valid image URL is required"],
                 });
             }
 
@@ -234,7 +224,7 @@ class ProductController {
                 brewGuide,
                 origin,
                 roastLevel,
-                images: newImageUrls, // ✅ Now it's a validated array of URLs
+                image: newImageUrl, // 👈 Single URL
                 inStock,
                 isActive,
             };
@@ -251,9 +241,7 @@ class ProductController {
                 message: "Product updated successfully",
             });
         } catch (error) {
-            console.error(
-                `Error in ProductController.productUpdate: ${error.message}`
-            );
+            console.error(`Error in ProductController.productUpdate: ${error.message}`);
             return res.status(500).json({
                 success: false,
                 status: 500,
@@ -261,6 +249,7 @@ class ProductController {
             });
         }
     }
+
     // controllers/product.controller.js
 
     async deleteProduct(req, res) {
