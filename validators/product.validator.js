@@ -72,6 +72,12 @@ const productValidationSchema = Joi.object({
             "array.min": "At least one image is required",
             "string.uri": "Each image must be a valid URL",
         }),
+    inStock: Joi.boolean().required().default(true).message({
+        "boolean.base": "inStock must be a boolean",
+    }),
+    isActive: Joi.boolean().required().default(true).message({
+        "boolean.base": "isActive must be a boolean",
+    }),
 }).options({ abortEarly: false }); // Keep this for full error reporting
 
 module.exports = { productValidationSchema };

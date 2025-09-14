@@ -162,6 +162,8 @@ class ProductController {
                 brewGuide,
                 origin,
                 roastLevel,
+                inStock,
+                isActive,
             } = value;
 
             let newImageUrls = existingProduct.images;
@@ -211,6 +213,8 @@ class ProductController {
                 origin,
                 roastLevel,
                 images: newImageUrls,
+                inStock,
+                isActive,
             };
 
             const savedData = await ProductRepositories.updateProduct(
